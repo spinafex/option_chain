@@ -1,0 +1,119 @@
+import yfinance as yf
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
+
+def download_option_chain(ticker):
+    """
+    Downloads the option chain for a given ticker from Yahoo Finance and returns it as a pandas DataFrame.
+    
+    Args:
+        ticker (str): The ticker symbol of the stock.
+        
+    Returns:
+        pd.DataFrame: A DataFrame containing the option chain data.
+    """
+    try:
+        # Fetch the ticker object
+        stock = yf.Ticker(ticker)
+        
+        # Get the expiration dates
+        expiration_dates = stock.options
+        
+        if not expiration_dates:
+            print(f"No expiration dates found for ticker {ticker}")
+            return pd.DataFrame()
+        
+        # Initialize an empty DataFrame to store the option chain
+        option_chain_df = pd.DataFrame()
+        
+        # Loop through each expiration date and fetch the option chain
+        for exp_date in expiration_dates:
+            try:
+                # Get the option chain for the specific expiration date
+                opt_chain = stock.option_chain(exp_date)
+                
+                # Combine calls and puts into a single DataFrame
+                calls = opt_chain.calls
+                puts = opt_chain.puts
+                calls['type'] = 'call'
+                puts['type'] = 'put'
+                combined = pd.concat([calls, puts])
+                
+                # Add the expiration date to the DataFrame
+                combined['expirationDate'] = exp_date
+                
+                # Append to the main DataFrame
+                option_chain_df = pd.concat([option_chain_df, combined], ignore_index=True)
+            except Exception as e:
+                print(f"Error fetching data for expiration date {exp_date}: {e}")
+        
+        return option_chain_df
+    
+    except Exception as e:
+        print(f"Error fetching option chain for ticker {ticker}: {e}")
+        return pd.DataFrame()
+
+def plot_option_surface(option_chain_df):
+    """
+    Plots the option surface for the given option chain DataFrame.
+    
+    Args:
+        option_chain_df (pd.DataFrame): The DataFrame containing the option chain data.
+    """
+    if option_chain_df.empty:
+        print("The option chain DataFrame is empty. Cannot plot option surface.")
+        return
+    
+    try:
+        # Filter for calls only
+        calls = option_chain_df[option_chain_df['type'] == 'call'].copy()
+        
+        # Convert expirationDate to datetime
+        calls['expirationDate'] = pd.to_datetime(calls['expirationDate'])
+        
+        # Calculate days to expiration
+        today = pd.Timestamp.today()
+        calls['daysToExpiration'] = (calls['expirationDate'] - today).dt.days
+        
+        # Create a pivot table for the surface plot
+        pivot_table = calls.pivot_table(index='strike', columns='daysToExpiration', values='impliedVolatility')
+        
+        # Drop rows and columns with NaN values
+        pivot_table = pivot_table.dropna(axis=0, how='any').dropna(axis=1, how='any')
+        
+        if pivot_table.empty:
+            print("The pivot table is empty after dropping NaN values. Cannot plot option surface.")
+            return
+        
+        # Prepare data for plotting
+        X, Y = np.meshgrid(pivot_table.columns, pivot_table.index)
+        Z = pivot_table.values
+        
+        # Plot the surface
+        fig = plt.figure(figsize=(12, 8))
+        ax = fig.add_subplot(111, projection='3d')
+        surf = ax.plot_surface(X, Y, Z, cmap='viridis')
+        
+        # Add labels and title
+        ax.set_xlabel('Days to Expiration')
+        ax.set_ylabel('Strike Price')
+        ax.set_zlabel('Implied Volatility')
+        ax.set_title('Option Surface')
+        
+        # Add a color bar
+        fig.colorbar(surf, ax=ax, shrink=0.5, aspect=5)
+        
+        plt.show()
+    
+    except Exception as e:
+        print(f"Error plotting option surface: {e}")
+
+# Example usage
+ticker = 'NVDA'  # Replace with your desired ticker symbol
+option_chain_df = download_option_chain(ticker)
+if not option_chain_df.empty:
+    print(option_chain_df.head())
+    # Plot the option surface
+    plot_option_surface(option_chain_df)
