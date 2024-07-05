@@ -1,0 +1,64 @@
+!pip install QuantLib
+
+import QuantLib as ql
+
+
+# Set the evaluation date
+today = ql.Date(15, 1, 2023)
+ql.Settings.instance().evaluationDate = today
+
+# Define the option parameters
+expiry = ql.Date(15, 7, 2023)
+strike_price = 100
+option_type = ql.Option.Call
+
+# Create the option
+payoff = ql.PlainVanillaPayoff(option_type, strike_price)
+exercise = ql.EuropeanExercise(expiry)
+european_option = ql.VanillaOption(payoff, exercise)
+
+# Define the market parameters
+spot_price = 100
+volatility = 0.2  # 20%
+dividend_rate = 0.01  # 1%
+risk_free_rate = 0.05  # 5%
+
+# Create the market conditions
+spot_handle = ql.QuoteHandle(ql.SimpleQuote(spot_price))
+volatility_handle = ql.BlackVolTermStructureHandle(
+    ql.BlackConstantVol(today, ql.NullCalendar(), ql.QuoteHandle(ql.SimpleQuote(volatility)), ql.Actual365Fixed()))
+dividend_handle = ql.YieldTermStructureHandle(
+    ql.FlatForward(today, ql.QuoteHandle(ql.SimpleQuote(dividend_rate)), ql.Actual365Fixed()))
+risk_free_handle = ql.YieldTermStructureHandle(
+    ql.FlatForward(today, ql.QuoteHandle(ql.SimpleQuote(risk_free_rate)), ql.Actual365Fixed()))
+
+# Create the Black-Scholes-Merton process
+bsm_process = ql.BlackScholesMertonProcess(spot_handle, dividend_handle, risk_free_handle, volatility_handle)
+
+# Price the option using the analytic European engine
+european_option.setPricingEngine(ql.AnalyticEuropeanEngine(bsm_process))
+option_price = european_option.NPV()
+print(f"Option Price: {option_price:.2f}")
+
+# Calculate the option delta
+delta = european_option.delta()
+print(f"Option Delta: {delta:.2f}")
+
+# Initial stock position based on delta
+stock_position = delta * spot_price
+print(f"Initial Stock Position: {stock_position:.2f}")
+
+# Simulate a change in the spot price
+new_spot_price = 105
+spot_handle = ql.QuoteHandle(ql.SimpleQuote(new_spot_price))
+
+# Recalculate the option price and delta
+new_option_price = european_option.NPV()
+new_delta = european_option.delta()
+print(f"New Option Price: {new_option_price:.2f}")
+print(f"New Option Delta: {new_delta:.2f}")
+
+# Adjust the stock position for delta hedging
+new_stock_position = new_delta * new_spot_price
+hedge_adjustment = new_stock_position - stock_position
+print(f"Adjustment in Stock Position: {hedge_adjustment:.2f}")
