@@ -1,0 +1,65 @@
+!pip install thetadata
+
+from datetime import date
+import thetadata.client
+
+from thetadata import (
+    Quote,
+    StreamMsg,
+    ThetaClient,
+    OptionRight,
+    StreamMsgType
+)
+
+from thetadata import StreamResponseType as ResponseType
+
+last_call_quote = Quote()
+last_put_quote = Quote()
+price=0
+
+def callback_straddle(msg):
+  if (msg.type != StreamMsgType.QUOTE):
+    return
+
+    global price
+    if msg.contract.isCall:
+      last_call_Quote.copy_from(msg.quote)
+    else:
+      last_put_quote.copy_from
+    straddle_bid = round(last_call_quote.bid + last_put_quote.bid, 2)
+    straddle_ask = round(last_call_quote.ask + last_put_quote.ask, 2)
+    straddle_mid = round((straddle_bid + straddle_ask) / 2, 2)
+
+    time_stamp = thetadata.client.ms_to_time(
+        msg.quote.ms_of_day
+    )
+    if price != straddle_mid:
+      print(f"{time_stamp} bid: {straddle_bid}mid: {straddle_mid} ask: {straddle_ask}")
+      price = straddle_mid
+
+
+def streaming_straddle():
+  client = ThetaClient(
+      username="",
+      passwd="",
+      
+  )
+  client.connect_stream(
+      callback_straddle
+  )
+
+  req_id_call = client.req_quote_stream_opt(
+      "SPY", date(2023, 5, 5), 410, OptionRight.CALL
+  ) #Request quote updates
+
+  req_id_put = client.req_quote_stream_opt(
+      "SPY", date(2023, 5, 5), 410, OptionRight.PUT
+  )
+  if (
+    client.verify(req_id_call) != StreamResponseType.SUBSCRIBED
+    or client.verify(req_id_put) != StreamResponseType.SUBSCRIBED
+
+  ):
+    raise Exception(
+      "Unable to stream contract. A standard/PRO subscription required."
+    )
